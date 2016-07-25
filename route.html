@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta name="viewport" content="initial-scale=1.0, user-scalable=no">
+    <meta charset="utf-8">
+    <title>Direction Test</title>
+    <link href="map.css" rel="stylesheet">
+    <style>
+      #directions-panel {
+        height: 100%;
+        float: right;
+        width: 390px;
+        overflow: auto;
+      }
+
+      #map-canvas {
+        margin-right: 400px;
+      }
+
+      #control {
+        background: #fff;
+        padding: 5px;
+        font-size: 14px;
+        font-family: Arial;
+        border: 1px solid #ccc;
+        box-shadow: 0 2px 2px rgba(33, 33, 33, 0.4);
+        display: none;
+      }
+
+      @media print {
+        #map-canvas {
+          height: 500px;
+          margin: 0;
+        }
+
+        #directions-panel {
+          float: none;
+          width: auto;
+        }
+      }
+    </style>
+   	<script type="text/javascript"
+      src="http://maps.googleapis.com/maps/api/js?key=AIzaSyBFFMfe-Up6Fs4-YBGkoEzB9iRTesu1fyc&sensor=false">
+    </script>
+    <script>
+			function readFile(filename){
+				var fso = new ActiveXObject("Scripting.FileSystemObject");
+				var f = fso.OpenTextFile(filename,1);
+				var s = "";
+				var t = [];
+				var r = [];
+				var i = 0;
+				var m = 0;
+				var last = 0;
+				var now = 0;
+				var time = parseInt(document.getElementById('interval').value, 10);
+				var interval = 0;
+				var line = parseInt(document.getElementById('line').value, 10);
+				var l = 0;
+				while (!f.AtEndOfStream){
+					s = f.ReadLine();
+					l++;
+					if( l < line ){
+						continue;
+					}
+					t = s.split(',');
+					if( t.length < 8 ) continue;
+					m = t[1].indexOf('2');
+					if( m == -1 )continue;
+					now = Date.parse(t[1]);
+					interval = (now - last)/1000;
+					if( interval >= time ){
+						last = now;
+					}
+					else{
+						continue;
+					}
+					i++;
+					if( i > 10 ){
+						//alert("Too many points, only show first 10 points");
+						break;
+					}
+					r.push(l.toString()+','+t[1]+','+t[3]+' '+t[2]);
+				}
+				f.Close();
+				return r;
+			}
+		</script>
+    <script>
+      var directionDisplay;
+      var directionsService = new google.maps.DirectionsService();
+      var map;
+
+      function initialize() {
+        directionsDisplay = new google.maps.DirectionsRenderer();
+        var start = new google.maps.LatLng(0.000000, 150.000000);
+        var mapOptions = {
+          zoom: 3,
+          mapTypeId: google.maps.MapTypeId.ROADMAP,
+          center: start
+        }
+        map = new google.maps.Map(document.getElementById('map_canvas'), mapOptions);
+        directionsDisplay.setMap(map);
+        directionsDisplay.setPanel(document.getElementById("directions-panel"));
+        
+        var control = document.getElementById('control');
+        control.style.display = 'block';
+        map.controls[google.maps.ControlPosition.TOP].push(control);
+      }
+
+      function calcRoute() {
+      	var routeInfo = readFile(document.getElementById('in').value)
+      	var info = [];
+      	var points = [];
+      	for (var t = 0; t < routeInfo.length; t++) {
+      		var tmp = routeInfo[t].split(',');
+      		info.push(tmp[0]+': '+tmp[1]);
+      		points.push(tmp[2]);
+      	}
+        var start = points[0];
+        var end = points[points.length-1];
+        var waypts = [];
+        for (var i = 1; i < points.length-1; i++) {
+            waypts.push({
+                location:points[i],
+                stopover:true});
+        }
+        var selectedMode = document.getElementById("mode").value;
+
+        var request = {
+            origin: start,
+            destination: end,
+            waypoints: waypts,
+            optimizeWaypoints: false,
+            travelMode: google.maps.DirectionsTravelMode[selectedMode]
+        };
+        directionsService.route(request, function(response, status) {
+          if (status == google.maps.DirectionsStatus.OK) {
+            directionsDisplay.setDirections(response);
+            var route = response.routes[0];
+            var summaryPanel = document.getElementById('summaryPanel');
+            summaryPanel.innerHTML = '';
+            // For each route, display summary information.
+            for (var i = 0; i < route.legs.length; i++) {
+              var routeSegment = i + 1;
+              summaryPanel.innerHTML += '<b>Route Segment: ' + routeSegment + '</b><br>';
+              summaryPanel.innerHTML += route.legs[i].start_address + ' to ';
+              summaryPanel.innerHTML += route.legs[i].end_address + '<br>';
+              summaryPanel.innerHTML += route.legs[i].distance.text + '<br><br>';
+            }
+          }
+          else{
+          	alert("Bad Input Points");
+          }
+        });
+        var t = document.getElementById('timePanel');
+        t.innerHTML = '';
+        for (var j = 0; j < info.length-1; j++) {
+        	var k = j+1;
+        	t.innerHTML += '<b>Route Segment: ' + k + '</b><br>';
+        	t.innerHTML += info[j] + '-->' + info[j+1] + '<br>';
+        	var p = info[j+1].split(': ');
+        	var time1 = Date.parse(p[1]);
+        	p = info[j].split(': ');
+        	var time2 = Date.parse(p[1]);
+        	var interval_sec = (time1 - time2)/1000;
+        	var interval_min = (time1 - time2)/60000;
+        	t.innerHTML += 'Time: '+ interval_sec +' s, approximate: ' + interval_min.toFixed(2) +' min <br><br>';
+        }
+      }
+    </script>
+  </head>
+  <body onload="initialize()">
+	<div id="control">
+    <b>Input File: </b>
+    <input type="file" id="in" name="in" />
+		<b>Start Line: </b>
+    <input type="text" id="line" name="line" value="0" size="1" />
+    <b>Interval(s): </b>
+    <input type="text" id="interval" name="interval" value="180" size="1" />
+		<input type="button" value="Route" onclick="calcRoute();"/>
+    <b>Mode: </b>
+    <select id="mode" onchange="calcRoute();">
+      <option value="DRIVING">Driving</option>
+      <option value="WALKING">Walking</option>
+    </select>
+    </div>
+    <div id="directions-panel">
+    	<div id="summaryPanel" style="margin:20px;background-color:#FFEE77;"></div>
+    	<div id="timePanel" style="margin:20px;background-color:#FFEE77;"></div>
+    </div>
+    <div id="map_canvas"></div>
+  </body>
+</html>
